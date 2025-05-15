@@ -39,19 +39,19 @@ interface Relation {
   relationType: string;
 }
 
-interface KnowledgeGraph {
+interface Notepad {
   entities: Entity[];
   relations: Relation[];
 }
 
-// The KnowledgeGraphManager class contains all operations to interact with the knowledge graph
-class KnowledgeGraphManager {
-  private async loadGraph(): Promise<KnowledgeGraph> {
+// The NotepadManager class contains all operations to interact with the notepad
+class NotepadManager {
+  private async loadNotepad(): Promise<Notepad> {
     try {
       const data = await fs.readFile(MEMORY_FILE_PATH, "utf-8");
       const lines = data.split("\n").filter((line) => line.trim() !== "");
       return lines.reduce(
-        (graph: KnowledgeGraph, line) => {
+        (graph: Notepad, line) => {
           const item = JSON.parse(line);
           if (item.type === "entity") graph.entities.push(item as Entity);
           if (item.type === "relation") graph.relations.push(item as Relation);
@@ -71,27 +71,31 @@ class KnowledgeGraphManager {
     }
   }
 
-  private async saveGraph(graph: KnowledgeGraph): Promise<void> {
+  private async saveNotepad(notepad: Notepad): Promise<void> {
     const lines = [
-      ...graph.entities.map((e) => JSON.stringify({ type: "entity", ...e })),
-      ...graph.relations.map((r) => JSON.stringify({ type: "relation", ...r })),
+      ...notepad.entities.map((e) => JSON.stringify({ type: "entity", ...e })),
+      ...notepad.relations.map((r) =>
+        JSON.stringify({ type: "relation", ...r })
+      ),
     ];
     await fs.writeFile(MEMORY_FILE_PATH, lines.join("\n"));
   }
 
   async createEntities(entities: Entity[]): Promise<Entity[]> {
-    const graph = await this.loadGraph();
+    const notepad = await this.loadNotepad();
     const newEntities = entities.filter(
       (e) =>
-        !graph.entities.some((existingEntity) => existingEntity.name === e.name)
+        !notepad.entities.some(
+          (existingEntity) => existingEntity.name === e.name
+        )
     );
-    graph.entities.push(...newEntities);
-    await this.saveGraph(graph);
+    notepad.entities.push(...newEntities);
+    await this.saveNotepad(notepad);
     return newEntities;
   }
 
   async createRelations(relations: Relation[]): Promise<Relation[]> {
-    const graph = await this.loadGraph();
+    const graph = await this.loadNotepad();
     const newRelations = relations.filter(
       (r) =>
         !graph.relations.some(
@@ -102,14 +106,14 @@ class KnowledgeGraphManager {
         )
     );
     graph.relations.push(...newRelations);
-    await this.saveGraph(graph);
+    await this.saveNotepad(graph);
     return newRelations;
   }
 
   async addObservations(
     observations: { entityName: string; contents: string[] }[]
   ): Promise<{ entityName: string; addedObservations: string[] }[]> {
-    const graph = await this.loadGraph();
+    const graph = await this.loadNotepad();
     const results = observations.map((o) => {
       const entity = graph.entities.find((e) => e.name === o.entityName);
       if (!entity) {
@@ -121,25 +125,25 @@ class KnowledgeGraphManager {
       entity.observations.push(...newObservations);
       return { entityName: o.entityName, addedObservations: newObservations };
     });
-    await this.saveGraph(graph);
+    await this.saveNotepad(graph);
     return results;
   }
 
   async deleteEntities(entityNames: string[]): Promise<void> {
-    const graph = await this.loadGraph();
+    const graph = await this.loadNotepad();
     graph.entities = graph.entities.filter(
       (e) => !entityNames.includes(e.name)
     );
     graph.relations = graph.relations.filter(
       (r) => !entityNames.includes(r.from) && !entityNames.includes(r.to)
     );
-    await this.saveGraph(graph);
+    await this.saveNotepad(graph);
   }
 
   async deleteObservations(
     deletions: { entityName: string; observations: string[] }[]
   ): Promise<void> {
-    const graph = await this.loadGraph();
+    const graph = await this.loadNotepad();
     deletions.forEach((d) => {
       const entity = graph.entities.find((e) => e.name === d.entityName);
       if (entity) {
@@ -148,11 +152,11 @@ class KnowledgeGraphManager {
         );
       }
     });
-    await this.saveGraph(graph);
+    await this.saveNotepad(graph);
   }
 
   async deleteRelations(relations: Relation[]): Promise<void> {
-    const graph = await this.loadGraph();
+    const graph = await this.loadNotepad();
     graph.relations = graph.relations.filter(
       (r) =>
         !relations.some(
@@ -162,16 +166,16 @@ class KnowledgeGraphManager {
             r.relationType === delRelation.relationType
         )
     );
-    await this.saveGraph(graph);
+    await this.saveNotepad(graph);
   }
 
-  async readGraph(): Promise<KnowledgeGraph> {
-    return this.loadGraph();
+  async readNotepad(): Promise<Notepad> {
+    return this.loadNotepad();
   }
 
   // Very basic search function
-  async searchNodes(query: string): Promise<KnowledgeGraph> {
-    const graph = await this.loadGraph();
+  async searchNodes(query: string): Promise<Notepad> {
+    const graph = await this.loadNotepad();
 
     // Filter entities
     const filteredEntities = graph.entities.filter(
@@ -191,7 +195,7 @@ class KnowledgeGraphManager {
       (r) => filteredEntityNames.has(r.from) && filteredEntityNames.has(r.to)
     );
 
-    const filteredGraph: KnowledgeGraph = {
+    const filteredGraph: Notepad = {
       entities: filteredEntities,
       relations: filteredRelations,
     };
@@ -199,8 +203,8 @@ class KnowledgeGraphManager {
     return filteredGraph;
   }
 
-  async openNodes(names: string[]): Promise<KnowledgeGraph> {
-    const graph = await this.loadGraph();
+  async openNodes(names: string[]): Promise<Notepad> {
+    const graph = await this.loadNotepad();
 
     // Filter entities
     const filteredEntities = graph.entities.filter((e) =>
@@ -215,7 +219,7 @@ class KnowledgeGraphManager {
       (r) => filteredEntityNames.has(r.from) && filteredEntityNames.has(r.to)
     );
 
-    const filteredGraph: KnowledgeGraph = {
+    const filteredGraph: Notepad = {
       entities: filteredEntities,
       relations: filteredRelations,
     };
@@ -224,13 +228,13 @@ class KnowledgeGraphManager {
   }
 }
 
-const knowledgeGraphManager = new KnowledgeGraphManager();
+const notepadManager = new NotepadManager();
 
 // The server instance and tools exposed to Claude
 const server = new Server(
   {
-    name: "memory-server",
-    version: "0.6.3",
+    name: "memory-notepad",
+    version: "1.0.0",
   },
   {
     capabilities: {
@@ -476,9 +480,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           {
             type: "text",
             text: JSON.stringify(
-              await knowledgeGraphManager.createEntities(
-                args.entities as Entity[]
-              ),
+              await notepadManager.createEntities(args.entities as Entity[]),
               null,
               2
             ),
@@ -491,7 +493,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           {
             type: "text",
             text: JSON.stringify(
-              await knowledgeGraphManager.createRelations(
+              await notepadManager.createRelations(
                 args.relations as Relation[]
               ),
               null,
@@ -506,7 +508,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           {
             type: "text",
             text: JSON.stringify(
-              await knowledgeGraphManager.addObservations(
+              await notepadManager.addObservations(
                 args.observations as {
                   entityName: string;
                   contents: string[];
@@ -519,19 +521,19 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         ],
       };
     case "delete_entities":
-      await knowledgeGraphManager.deleteEntities(args.entityNames as string[]);
+      await notepadManager.deleteEntities(args.entityNames as string[]);
       return {
         content: [{ type: "text", text: "Entities deleted successfully" }],
       };
     case "delete_observations":
-      await knowledgeGraphManager.deleteObservations(
+      await notepadManager.deleteObservations(
         args.deletions as { entityName: string; observations: string[] }[]
       );
       return {
         content: [{ type: "text", text: "Observations deleted successfully" }],
       };
     case "delete_relations":
-      await knowledgeGraphManager.deleteRelations(args.relations as Relation[]);
+      await notepadManager.deleteRelations(args.relations as Relation[]);
       return {
         content: [{ type: "text", text: "Relations deleted successfully" }],
       };
@@ -540,11 +542,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         content: [
           {
             type: "text",
-            text: JSON.stringify(
-              await knowledgeGraphManager.readGraph(),
-              null,
-              2
-            ),
+            text: JSON.stringify(await notepadManager.readNotepad(), null, 2),
           },
         ],
       };
@@ -554,7 +552,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           {
             type: "text",
             text: JSON.stringify(
-              await knowledgeGraphManager.searchNodes(args.query as string),
+              await notepadManager.searchNodes(args.query as string),
               null,
               2
             ),
@@ -567,7 +565,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           {
             type: "text",
             text: JSON.stringify(
-              await knowledgeGraphManager.openNodes(args.names as string[]),
+              await notepadManager.openNodes(args.names as string[]),
               null,
               2
             ),
