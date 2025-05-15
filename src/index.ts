@@ -26,22 +26,15 @@ const MEMORY_FILE_PATH = process.env.MEMORY_FILE_PATH
       )
   : defaultMemoryPath;
 
-// We are storing our memory using entities, relations, and observations in a graph structure
+// We are storing our memory using entities and observations
 interface Entity {
   name: string;
   entityType: string;
   observations: string[];
 }
 
-interface Relation {
-  from: string;
-  to: string;
-  relationType: string;
-}
-
 interface Notepad {
   entities: Entity[];
-  relations: Relation[];
 }
 
 // The NotepadManager class contains all operations to interact with the notepad
@@ -51,13 +44,12 @@ class NotepadManager {
       const data = await fs.readFile(MEMORY_FILE_PATH, "utf-8");
       const lines = data.split("\n").filter((line) => line.trim() !== "");
       return lines.reduce(
-        (graph: Notepad, line) => {
+        (notepad: Notepad, line) => {
           const item = JSON.parse(line);
-          if (item.type === "entity") graph.entities.push(item as Entity);
-          if (item.type === "relation") graph.relations.push(item as Relation);
-          return graph;
+          if (item.type === "entity") notepad.entities.push(item as Entity);
+          return notepad;
         },
-        { entities: [], relations: [] }
+        { entities: [] }
       );
     } catch (error) {
       if (
@@ -65,7 +57,7 @@ class NotepadManager {
         "code" in error &&
         (error as any).code === "ENOENT"
       ) {
-        return { entities: [], relations: [] };
+        return { entities: [] };
       }
       throw error;
     }
@@ -74,9 +66,6 @@ class NotepadManager {
   private async saveNotepad(notepad: Notepad): Promise<void> {
     const lines = [
       ...notepad.entities.map((e) => JSON.stringify({ type: "entity", ...e })),
-      ...notepad.relations.map((r) =>
-        JSON.stringify({ type: "relation", ...r })
-      ),
     ];
     await fs.writeFile(MEMORY_FILE_PATH, lines.join("\n"));
   }
@@ -92,22 +81,6 @@ class NotepadManager {
     notepad.entities.push(...newEntities);
     await this.saveNotepad(notepad);
     return newEntities;
-  }
-
-  async createRelations(relations: Relation[]): Promise<Relation[]> {
-    const graph = await this.loadNotepad();
-    const newRelations = relations.filter(
-      (r) =>
-        !graph.relations.some(
-          (existingRelation) =>
-            existingRelation.from === r.from &&
-            existingRelation.to === r.to &&
-            existingRelation.relationType === r.relationType
-        )
-    );
-    graph.relations.push(...newRelations);
-    await this.saveNotepad(graph);
-    return newRelations;
   }
 
   async addObservations(
@@ -134,9 +107,6 @@ class NotepadManager {
     graph.entities = graph.entities.filter(
       (e) => !entityNames.includes(e.name)
     );
-    graph.relations = graph.relations.filter(
-      (r) => !entityNames.includes(r.from) && !entityNames.includes(r.to)
-    );
     await this.saveNotepad(graph);
   }
 
@@ -152,20 +122,6 @@ class NotepadManager {
         );
       }
     });
-    await this.saveNotepad(graph);
-  }
-
-  async deleteRelations(relations: Relation[]): Promise<void> {
-    const graph = await this.loadNotepad();
-    graph.relations = graph.relations.filter(
-      (r) =>
-        !relations.some(
-          (delRelation) =>
-            r.from === delRelation.from &&
-            r.to === delRelation.to &&
-            r.relationType === delRelation.relationType
-        )
-    );
     await this.saveNotepad(graph);
   }
 
@@ -187,17 +143,8 @@ class NotepadManager {
         )
     );
 
-    // Create a Set of filtered entity names for quick lookup
-    const filteredEntityNames = new Set(filteredEntities.map((e) => e.name));
-
-    // Filter relations to only include those between filtered entities
-    const filteredRelations = graph.relations.filter(
-      (r) => filteredEntityNames.has(r.from) && filteredEntityNames.has(r.to)
-    );
-
     const filteredGraph: Notepad = {
       entities: filteredEntities,
-      relations: filteredRelations,
     };
 
     return filteredGraph;
@@ -211,17 +158,8 @@ class NotepadManager {
       names.includes(e.name)
     );
 
-    // Create a Set of filtered entity names for quick lookup
-    const filteredEntityNames = new Set(filteredEntities.map((e) => e.name));
-
-    // Filter relations to only include those between filtered entities
-    const filteredRelations = graph.relations.filter(
-      (r) => filteredEntityNames.has(r.from) && filteredEntityNames.has(r.to)
-    );
-
     const filteredGraph: Notepad = {
       entities: filteredEntities,
-      relations: filteredRelations,
     };
 
     return filteredGraph;
@@ -280,40 +218,6 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         },
       },
       {
-        name: "create_relations",
-        description:
-          "Create multiple new relations between entities in the knowledge graph. Relations should be in active voice",
-        inputSchema: {
-          type: "object",
-          properties: {
-            relations: {
-              type: "array",
-              items: {
-                type: "object",
-                properties: {
-                  from: {
-                    type: "string",
-                    description:
-                      "The name of the entity where the relation starts",
-                  },
-                  to: {
-                    type: "string",
-                    description:
-                      "The name of the entity where the relation ends",
-                  },
-                  relationType: {
-                    type: "string",
-                    description: "The type of the relation",
-                  },
-                },
-                required: ["from", "to", "relationType"],
-              },
-            },
-          },
-          required: ["relations"],
-        },
-      },
-      {
         name: "add_observations",
         description:
           "Add new observations to existing entities in the knowledge graph",
@@ -345,8 +249,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "delete_entities",
-        description:
-          "Delete multiple entities and their associated relations from the knowledge graph",
+        description: "Delete multiple entities from the knowledge graph",
         inputSchema: {
           type: "object",
           properties: {
@@ -387,40 +290,6 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             },
           },
           required: ["deletions"],
-        },
-      },
-      {
-        name: "delete_relations",
-        description: "Delete multiple relations from the knowledge graph",
-        inputSchema: {
-          type: "object",
-          properties: {
-            relations: {
-              type: "array",
-              items: {
-                type: "object",
-                properties: {
-                  from: {
-                    type: "string",
-                    description:
-                      "The name of the entity where the relation starts",
-                  },
-                  to: {
-                    type: "string",
-                    description:
-                      "The name of the entity where the relation ends",
-                  },
-                  relationType: {
-                    type: "string",
-                    description: "The type of the relation",
-                  },
-                },
-                required: ["from", "to", "relationType"],
-              },
-              description: "An array of relations to delete",
-            },
-          },
-          required: ["relations"],
         },
       },
       {
@@ -487,21 +356,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           },
         ],
       };
-    case "create_relations":
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify(
-              await notepadManager.createRelations(
-                args.relations as Relation[]
-              ),
-              null,
-              2
-            ),
-          },
-        ],
-      };
     case "add_observations":
       return {
         content: [
@@ -531,11 +385,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       );
       return {
         content: [{ type: "text", text: "Observations deleted successfully" }],
-      };
-    case "delete_relations":
-      await notepadManager.deleteRelations(args.relations as Relation[]);
-      return {
-        content: [{ type: "text", text: "Relations deleted successfully" }],
       };
     case "read_graph":
       return {
