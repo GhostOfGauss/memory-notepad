@@ -26,15 +26,15 @@ const MEMORY_FILE_PATH = process.env.MEMORY_FILE_PATH
       )
   : defaultMemoryPath;
 
-// We are storing our memory using entities and observations
-interface Entity {
+// We are storing our memory using notes and observations
+interface Note {
   name: string;
-  entityType: string;
+  noteType: string;
   observations: string[];
 }
 
 interface Notepad {
-  entities: Entity[];
+  notes: Note[];
 }
 
 // The NotepadManager class contains all operations to interact with the notepad
@@ -46,10 +46,10 @@ class NotepadManager {
       return lines.reduce(
         (notepad: Notepad, line) => {
           const item = JSON.parse(line);
-          if (item.type === "entity") notepad.entities.push(item as Entity);
+          if (item.type === "note") notepad.notes.push(item as Note);
           return notepad;
         },
-        { entities: [] }
+        { notes: [] }
       );
     } catch (error) {
       if (
@@ -57,7 +57,7 @@ class NotepadManager {
         "code" in error &&
         (error as any).code === "ENOENT"
       ) {
-        return { entities: [] };
+        return { notes: [] };
       }
       throw error;
     }
@@ -65,64 +65,59 @@ class NotepadManager {
 
   private async saveNotepad(notepad: Notepad): Promise<void> {
     const lines = [
-      ...notepad.entities.map((e) => JSON.stringify({ type: "entity", ...e })),
+      ...notepad.notes.map((e) => JSON.stringify({ type: "note", ...e })),
     ];
     await fs.writeFile(MEMORY_FILE_PATH, lines.join("\n"));
   }
 
-  async createEntities(entities: Entity[]): Promise<Entity[]> {
+  async createNotes(notes: Note[]): Promise<Note[]> {
     const notepad = await this.loadNotepad();
-    const newEntities = entities.filter(
-      (e) =>
-        !notepad.entities.some(
-          (existingEntity) => existingEntity.name === e.name
-        )
+    const newNotes = notes.filter(
+      (e) => !notepad.notes.some((existingNote) => existingNote.name === e.name)
     );
-    notepad.entities.push(...newEntities);
+    notepad.notes.push(...newNotes);
     await this.saveNotepad(notepad);
-    return newEntities;
+    return newNotes;
   }
 
   async addObservations(
-    observations: { entityName: string; contents: string[] }[]
-  ): Promise<{ entityName: string; addedObservations: string[] }[]> {
-    const graph = await this.loadNotepad();
+    observations: { noteName: string; contents: string[] }[]
+  ): Promise<{ noteName: string; addedObservations: string[] }[]> {
+    const notepad = await this.loadNotepad();
     const results = observations.map((o) => {
-      const entity = graph.entities.find((e) => e.name === o.entityName);
-      if (!entity) {
-        throw new Error(`Entity with name ${o.entityName} not found`);
+      const note = notepad.notes.find((e) => e.name === o.noteName);
+      if (!note) {
+        throw new Error(`Note with name ${o.noteName} not found`);
       }
       const newObservations = o.contents.filter(
-        (content) => !entity.observations.includes(content)
+        (content) => !note.observations.includes(content)
       );
-      entity.observations.push(...newObservations);
-      return { entityName: o.entityName, addedObservations: newObservations };
+      note.observations.push(...newObservations);
+      return { noteName: o.noteName, addedObservations: newObservations };
     });
-    await this.saveNotepad(graph);
+    await this.saveNotepad(notepad);
     return results;
   }
 
-  async deleteEntities(entityNames: string[]): Promise<void> {
-    const graph = await this.loadNotepad();
-    graph.entities = graph.entities.filter(
-      (e) => !entityNames.includes(e.name)
-    );
-    await this.saveNotepad(graph);
+  async deleteNotes(noteNames: string[]): Promise<void> {
+    const notepad = await this.loadNotepad();
+    notepad.notes = notepad.notes.filter((e) => !noteNames.includes(e.name));
+    await this.saveNotepad(notepad);
   }
 
   async deleteObservations(
-    deletions: { entityName: string; observations: string[] }[]
+    deletions: { noteName: string; observations: string[] }[]
   ): Promise<void> {
-    const graph = await this.loadNotepad();
+    const notepad = await this.loadNotepad();
     deletions.forEach((d) => {
-      const entity = graph.entities.find((e) => e.name === d.entityName);
-      if (entity) {
-        entity.observations = entity.observations.filter(
+      const note = notepad.notes.find((e) => e.name === d.noteName);
+      if (note) {
+        note.observations = note.observations.filter(
           (o) => !d.observations.includes(o)
         );
       }
     });
-    await this.saveNotepad(graph);
+    await this.saveNotepad(notepad);
   }
 
   async readNotepad(): Promise<Notepad> {
@@ -130,39 +125,37 @@ class NotepadManager {
   }
 
   // Very basic search function
-  async searchNodes(query: string): Promise<Notepad> {
-    const graph = await this.loadNotepad();
+  async searchNotes(query: string): Promise<Notepad> {
+    const notepad = await this.loadNotepad();
 
-    // Filter entities
-    const filteredEntities = graph.entities.filter(
+    // Filter notes
+    const filteredNotes = notepad.notes.filter(
       (e) =>
         e.name.toLowerCase().includes(query.toLowerCase()) ||
-        e.entityType.toLowerCase().includes(query.toLowerCase()) ||
+        e.noteType.toLowerCase().includes(query.toLowerCase()) ||
         e.observations.some((o) =>
           o.toLowerCase().includes(query.toLowerCase())
         )
     );
 
-    const filteredGraph: Notepad = {
-      entities: filteredEntities,
+    const filteredNotepad: Notepad = {
+      notes: filteredNotes,
     };
 
-    return filteredGraph;
+    return filteredNotepad;
   }
 
-  async openNodes(names: string[]): Promise<Notepad> {
-    const graph = await this.loadNotepad();
+  async openNotes(names: string[]): Promise<Notepad> {
+    const notepad = await this.loadNotepad();
 
-    // Filter entities
-    const filteredEntities = graph.entities.filter((e) =>
-      names.includes(e.name)
-    );
+    // Filter notes
+    const filteredNotes = notepad.notes.filter((e) => names.includes(e.name));
 
-    const filteredGraph: Notepad = {
-      entities: filteredEntities,
+    const filteredNotepad: Notepad = {
+      notes: filteredNotes,
     };
 
-    return filteredGraph;
+    return filteredNotepad;
   }
 }
 
@@ -185,42 +178,41 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
     tools: [
       {
-        name: "create_entities",
-        description: "Create multiple new entities in the knowledge graph",
+        name: "create_notes",
+        description: "Create multiple new notes in the notepad",
         inputSchema: {
           type: "object",
           properties: {
-            entities: {
+            notes: {
               type: "array",
               items: {
                 type: "object",
                 properties: {
                   name: {
                     type: "string",
-                    description: "The name of the entity",
+                    description: "The name of the note",
                   },
-                  entityType: {
+                  noteType: {
                     type: "string",
-                    description: "The type of the entity",
+                    description: "The type of the note",
                   },
                   observations: {
                     type: "array",
                     items: { type: "string" },
                     description:
-                      "An array of observation contents associated with the entity",
+                      "An array of observation contents associated with the note",
                   },
                 },
-                required: ["name", "entityType", "observations"],
+                required: ["name", "noteType", "observations"],
               },
             },
           },
-          required: ["entities"],
+          required: ["notes"],
         },
       },
       {
         name: "add_observations",
-        description:
-          "Add new observations to existing entities in the knowledge graph",
+        description: "Add new observations to existing notes in the notepad",
         inputSchema: {
           type: "object",
           properties: {
@@ -229,10 +221,10 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
               items: {
                 type: "object",
                 properties: {
-                  entityName: {
+                  noteName: {
                     type: "string",
                     description:
-                      "The name of the entity to add the observations to",
+                      "The name of the note to add the observations to",
                   },
                   contents: {
                     type: "array",
@@ -240,7 +232,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
                     description: "An array of observation contents to add",
                   },
                 },
-                required: ["entityName", "contents"],
+                required: ["noteName", "contents"],
               },
             },
           },
@@ -248,24 +240,23 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         },
       },
       {
-        name: "delete_entities",
-        description: "Delete multiple entities from the knowledge graph",
+        name: "delete_notes",
+        description: "Delete multiple notes from the notepad",
         inputSchema: {
           type: "object",
           properties: {
-            entityNames: {
+            noteNames: {
               type: "array",
               items: { type: "string" },
-              description: "An array of entity names to delete",
+              description: "An array of note names to delete",
             },
           },
-          required: ["entityNames"],
+          required: ["noteNames"],
         },
       },
       {
         name: "delete_observations",
-        description:
-          "Delete specific observations from entities in the knowledge graph",
+        description: "Delete specific observations from notes in the notepad",
         inputSchema: {
           type: "object",
           properties: {
@@ -274,10 +265,10 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
               items: {
                 type: "object",
                 properties: {
-                  entityName: {
+                  noteName: {
                     type: "string",
                     description:
-                      "The name of the entity containing the observations",
+                      "The name of the note containing the observations",
                   },
                   observations: {
                     type: "array",
@@ -285,7 +276,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
                     description: "An array of observations to delete",
                   },
                 },
-                required: ["entityName", "observations"],
+                required: ["noteName", "observations"],
               },
             },
           },
@@ -293,39 +284,38 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         },
       },
       {
-        name: "read_graph",
-        description: "Read the entire knowledge graph",
+        name: "read_notepad",
+        description: "Read the entire notepad",
         inputSchema: {
           type: "object",
           properties: {},
         },
       },
       {
-        name: "search_nodes",
-        description: "Search for nodes in the knowledge graph based on a query",
+        name: "search_notes",
+        description: "Search for notes in the notepad based on a query",
         inputSchema: {
           type: "object",
           properties: {
             query: {
               type: "string",
               description:
-                "The search query to match against entity names, types, and observation content",
+                "The search query to match against note names, types, and observation content",
             },
           },
           required: ["query"],
         },
       },
       {
-        name: "open_nodes",
-        description:
-          "Open specific nodes in the knowledge graph by their names",
+        name: "open_notes",
+        description: "Open specific notes in the notepad by their names",
         inputSchema: {
           type: "object",
           properties: {
             names: {
               type: "array",
               items: { type: "string" },
-              description: "An array of entity names to retrieve",
+              description: "An array of note names to retrieve",
             },
           },
           required: ["names"],
@@ -343,13 +333,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   }
 
   switch (name) {
-    case "create_entities":
+    case "create_notes":
       return {
         content: [
           {
             type: "text",
             text: JSON.stringify(
-              await notepadManager.createEntities(args.entities as Entity[]),
+              await notepadManager.createNotes(args.notes as Note[]),
               null,
               2
             ),
@@ -364,7 +354,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             text: JSON.stringify(
               await notepadManager.addObservations(
                 args.observations as {
-                  entityName: string;
+                  noteName: string;
                   contents: string[];
                 }[]
               ),
@@ -374,19 +364,19 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           },
         ],
       };
-    case "delete_entities":
-      await notepadManager.deleteEntities(args.entityNames as string[]);
+    case "delete_notes":
+      await notepadManager.deleteNotes(args.noteNames as string[]);
       return {
-        content: [{ type: "text", text: "Entities deleted successfully" }],
+        content: [{ type: "text", text: "Notes deleted successfully" }],
       };
     case "delete_observations":
       await notepadManager.deleteObservations(
-        args.deletions as { entityName: string; observations: string[] }[]
+        args.deletions as { noteName: string; observations: string[] }[]
       );
       return {
         content: [{ type: "text", text: "Observations deleted successfully" }],
       };
-    case "read_graph":
+    case "read_notepad":
       return {
         content: [
           {
@@ -395,26 +385,26 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           },
         ],
       };
-    case "search_nodes":
+    case "search_notes":
       return {
         content: [
           {
             type: "text",
             text: JSON.stringify(
-              await notepadManager.searchNodes(args.query as string),
+              await notepadManager.searchNotes(args.query as string),
               null,
               2
             ),
           },
         ],
       };
-    case "open_nodes":
+    case "open_notes":
       return {
         content: [
           {
             type: "text",
             text: JSON.stringify(
-              await notepadManager.openNodes(args.names as string[]),
+              await notepadManager.openNotes(args.names as string[]),
               null,
               2
             ),
@@ -429,7 +419,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error("Knowledge Graph MCP Server running on stdio");
+  console.error("Notepad MCP Server running on stdio");
 }
 
 main().catch((error) => {
