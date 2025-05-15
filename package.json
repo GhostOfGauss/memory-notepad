@@ -1,0 +1,18 @@
+{
+  "name": "memory-notepad",
+  "version": "1.0.0",
+  "description": "Minimal implementation of memory for agents. Unstructured list of entries into a fixed file.",
+  "main": "index.js",
+  "scripts": {
+    "build": "tsc",
+    "lint": "eslint src"
+  },
+  "keywords": [],
+  "author": "Todd Norton",
+  "license": "ISC",
+  "devDependencies": {
+    "@eslint/js": "^9.24.0",
+    "@types/node": "^22.15.18",
+    "typescript": "^5.8.3"
+  }
+}
