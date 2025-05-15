@@ -2,6 +2,7 @@
   "name": "memory-notepad",
   "version": "1.0.0",
   "description": "Minimal implementation of memory for agents. Unstructured list of entries into a fixed file.",
+  "type": "module",
   "main": "index.js",
   "scripts": {
     "build": "tsc",
